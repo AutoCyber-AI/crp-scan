@@ -115,7 +115,7 @@ jobs:
           format: markdown
           upload-sarif: true
           summary: true
-          min-version: '3.0.0'
+          min-version: '3.1.0'
           min-grounding: '0.6'
 
       - name: Comment findings on PR
@@ -139,7 +139,7 @@ jobs:
 Install and run locally:
 
 ```bash
-pip install crprotocol
+pip install "crprotocol[cli]>=3.1.0"
 
 # Scan current directory
 python -m crp scan
@@ -194,4 +194,7 @@ the [crprotocol license](https://github.com/AutoCyber-AI/context-relay-protocol/
 
 - [Context Relay Protocol specification](https://github.com/AutoCyber-AI/context-relay-protocol)
 - [crprotocol on PyPI](https://pypi.org/project/crprotocol/)
+- [Full Setup & Testing Guide](https://github.com/AutoCyber-AI/context-relay-protocol/blob/main/docs/CRP_SCAN_ACTION_GUIDE.md)
 - [Report a bug / request a rule](https://github.com/AutoCyber-AI/crp-scan/issues)
+
+done
