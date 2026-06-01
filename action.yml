@@ -64,7 +64,7 @@ inputs:
 
   min-version:
     description: >
-      Minimum crprotocol version to enforce (e.g. '3.0.0').
+      Minimum crprotocol version to enforce (e.g. '3.1.0').
     required: false
     default: ''
 
@@ -89,6 +89,7 @@ inputs:
   crprotocol-version:
     description: >
       crprotocol package version to install. Leave blank for latest.
+      NOTE: crp scan requires crprotocol >= 3.1.0
     required: false
     default: ''
 
@@ -119,13 +120,13 @@ runs:
         set -euo pipefail
         PKG="crprotocol"
         VER="${{ inputs.crprotocol-version }}"
-        # Install with [cli] extra so that click (required by `crp scan`) is included.
-        # crprotocol has no required dependencies by default (zero-dep core);
-        # the CLI extra adds click.
+        # crp scan requires crprotocol >= 3.1.0 (first version with crp scan CLI).
+        # Install with [cli] extra so click is included (zero-dep core requires it explicitly).
         if [[ -n "$VER" ]]; then
           pip install --quiet "${PKG}[cli]==${VER}"
         else
-          pip install --quiet "${PKG}[cli]"
+          # Pin minimum version that includes crp scan; upgrade if already installed
+          pip install --quiet --upgrade "${PKG}[cli]>=3.1.0"
         fi
         echo "Installed: $(pip show crprotocol | grep ^Version)"
 
@@ -168,7 +169,7 @@ runs:
         import sys, json, pathlib
         sarif_path = sys.argv[1]
         out_path   = sys.argv[2]
-        # Define label_map before try block so it's always available
+        # Define label_map before try block so it is always in scope
         sev_map   = {'none': 0, 'note': 1, 'warning': 2, 'error': 3}
         label_map = {0: 'NONE', 1: 'LOW', 2: 'MEDIUM', 3: 'HIGH', 4: 'CRITICAL'}
         count, highest = 0, 0
