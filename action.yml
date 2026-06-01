@@ -119,10 +119,13 @@ runs:
         set -euo pipefail
         PKG="crprotocol"
         VER="${{ inputs.crprotocol-version }}"
+        # Install with [cli] extra so that click (required by `crp scan`) is included.
+        # crprotocol has no required dependencies by default (zero-dep core);
+        # the CLI extra adds click.
         if [[ -n "$VER" ]]; then
-          pip install --quiet "${PKG}==${VER}"
+          pip install --quiet "${PKG}[cli]==${VER}"
         else
-          pip install --quiet "${PKG}"
+          pip install --quiet "${PKG}[cli]"
         fi
         echo "Installed: $(pip show crprotocol | grep ^Version)"
 
@@ -146,6 +149,7 @@ runs:
         [[ "$REPORT_ONLY" == "true" ]] && EXTRA_FLAGS="$EXTRA_FLAGS --report-only"
         [[ "${{ inputs.summary }}" == "true" ]] && EXTRA_FLAGS="$EXTRA_FLAGS --summary $SUMMARY_FILE"
 
+        SCAN_EXIT=0
         # Run the scan (always emit SARIF; format controls console output)
         python -m crp scan \
           --paths "$PATHS" \
@@ -156,8 +160,6 @@ runs:
           $EXTRA_FLAGS \
           || SCAN_EXIT=$?
 
-        SCAN_EXIT=${SCAN_EXIT:-0}
-
         # Expose outputs
         echo "sarif_file=$SARIF_FILE" >> "$GITHUB_OUTPUT"
 
@@ -166,17 +168,19 @@ runs:
         import sys, json, pathlib
         sarif_path = sys.argv[1]
         out_path   = sys.argv[2]
+        # Define label_map before try block so it's always available
+        sev_map   = {'none': 0, 'note': 1, 'warning': 2, 'error': 3}
+        label_map = {0: 'NONE', 1: 'LOW', 2: 'MEDIUM', 3: 'HIGH', 4: 'CRITICAL'}
+        count, highest = 0, 0
         try:
             sarif = json.loads(pathlib.Path(sarif_path).read_text())
             results = []
             for run in sarif.get('runs', []):
                 results.extend(run.get('results', []))
             count = len(results)
-            sev_map = {'none': 0, 'note': 1, 'warning': 2, 'error': 3}
-            label_map = {0: 'NONE', 1: 'LOW', 2: 'MEDIUM', 3: 'HIGH'}
-            highest = max((sev_map.get(r.get('level','none'), 0) for r in results), default=0)
+            highest = max((sev_map.get(r.get('level', 'none'), 0) for r in results), default=0)
         except Exception:
-            count, highest = 0, 0
+            pass
         with open(out_path, 'a') as f:
             f.write(f'findings_count={count}\n')
             f.write(f'highest_severity={label_map.get(highest, "NONE")}\n')
