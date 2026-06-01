@@ -1,0 +1,75 @@
+# Example: add CRP-Scan to your own repository
+# Copy this file to .github/workflows/crp-scan.yml in your repo.
+
+name: CRP Governance Scan
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 3 * * 1'   # weekly Monday 03:00 UTC
+
+permissions:
+  contents: read
+  security-events: write   # needed for SARIF upload
+
+jobs:
+  crp-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── CRP-Scan ─────────────────────────────────────────────────────────
+      - name: CRP AI Governance Scan
+        id: crp
+        uses: AutoCyber-AI/crp-scan@v1
+        with:
+          # Paths to scan (comma-separated, relative to repo root)
+          paths: '.'
+
+          # Build fails when any finding is HIGH or CRITICAL
+          fail-on: HIGH
+
+          # Show markdown diff in Actions logs
+          format: markdown
+
+          # Upload to GitHub Security tab
+          upload-sarif: true
+
+          # Append summary table to Actions step summary
+          summary: true
+
+          # Require crprotocol >= 3.0.0
+          min-version: '3.0.0'
+
+      # ── Optional: comment findings on PRs ────────────────────────────────
+      - name: Comment CRP findings on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const count   = '${{ steps.crp.outputs.findings-count }}';
+            const sev     = '${{ steps.crp.outputs.highest-severity }}';
+            const icons   = { NONE: '✅', LOW: '💙', MEDIUM: '🟡', HIGH: '🟠', CRITICAL: '🔴' };
+            const icon    = icons[sev] || '❓';
+            const body    = [
+              `## ${icon} CRP Governance Scan`,
+              '',
+              `| Metric | Value |`,
+              `|--------|-------|`,
+              `| Findings | ${count} |`,
+              `| Highest severity | ${sev} |`,
+              '',
+              sev === 'NONE'
+                ? '**No governance issues found.**'
+                : `**[View full results in the Security tab](https://github.com/${context.repo.owner}/${context.repo.repo}/security/code-scanning)**`,
+            ].join('\n');
+            github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body,
+            });

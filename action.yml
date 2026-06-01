@@ -1,0 +1,197 @@
+# CRP-Scan — AI Governance Scanner
+# https://github.com/AutoCyber-AI/crp-scan
+#
+# Scans a repository for CRP / AI-governance conformance and uploads
+# findings to the GitHub Security tab via SARIF.
+#
+# Usage (minimal):
+#
+#   - uses: AutoCyber-AI/crp-scan@v1
+#
+# Usage (full):
+#
+#   - uses: AutoCyber-AI/crp-scan@v1
+#     with:
+#       paths: 'src,lib'
+#       fail-on: HIGH
+#       format: sarif
+#       upload-sarif: true
+#       summary: true
+
+name: 'CRP-Scan'
+description: >-
+  Scan your repository for AI-governance conformance — detects ungoverned
+  LLM calls, missing safety policies, missing audit trails, and version
+  drift. Uploads results to the GitHub Security tab (SARIF).
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  paths:
+    description: >
+      Comma-separated paths to scan. Defaults to the entire repository ('.').
+    required: false
+    default: '.'
+
+  fail-on:
+    description: >
+      Minimum severity that causes a non-zero exit code
+      (LOW | MEDIUM | HIGH | CRITICAL). Default HIGH.
+    required: false
+    default: 'HIGH'
+
+  format:
+    description: >
+      Console output format: text | json | markdown | sarif | junit.
+    required: false
+    default: 'text'
+
+  upload-sarif:
+    description: >
+      Upload SARIF results to the GitHub Security tab.
+      Requires the security-events: write permission.
+    required: false
+    default: 'true'
+
+  summary:
+    description: >
+      Append a markdown summary of findings to the GitHub Actions
+      step summary ($GITHUB_STEP_SUMMARY).
+    required: false
+    default: 'true'
+
+  min-version:
+    description: >
+      Minimum crprotocol version to enforce (e.g. '3.0.0').
+    required: false
+    default: ''
+
+  min-grounding:
+    description: >
+      Minimum required grounding score for policy lint (0.0–1.0).
+    required: false
+    default: '0.0'
+
+  report-only:
+    description: >
+      When 'true', report findings but always exit 0 (never fail the build).
+    required: false
+    default: 'false'
+
+  python-version:
+    description: >
+      Python version to install crprotocol with. Defaults to '3.11'.
+    required: false
+    default: '3.11'
+
+  crprotocol-version:
+    description: >
+      crprotocol package version to install. Leave blank for latest.
+    required: false
+    default: ''
+
+outputs:
+  sarif-file:
+    description: 'Path to the generated SARIF file (if upload-sarif is true).'
+    value: ${{ steps.scan.outputs.sarif_file }}
+
+  findings-count:
+    description: 'Total number of findings found.'
+    value: ${{ steps.scan.outputs.findings_count }}
+
+  highest-severity:
+    description: 'Highest severity finding (NONE | LOW | MEDIUM | HIGH | CRITICAL).'
+    value: ${{ steps.scan.outputs.highest_severity }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install crprotocol
+      shell: bash
+      run: |
+        set -euo pipefail
+        PKG="crprotocol"
+        VER="${{ inputs.crprotocol-version }}"
+        if [[ -n "$VER" ]]; then
+          pip install --quiet "${PKG}==${VER}"
+        else
+          pip install --quiet "${PKG}"
+        fi
+        echo "Installed: $(pip show crprotocol | grep ^Version)"
+
+    - name: Run CRP-Scan
+      id: scan
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        SARIF_FILE="${{ runner.temp }}/crp-scan.sarif"
+        SUMMARY_FILE="${{ runner.temp }}/crp-scan-summary.md"
+        PATHS="${{ inputs.paths }}"
+        FAIL_ON="${{ inputs.fail-on }}"
+        FORMAT="${{ inputs.format }}"
+        MIN_GROUNDING="${{ inputs.min-grounding }}"
+        MIN_VERSION="${{ inputs.min-version }}"
+        REPORT_ONLY="${{ inputs.report-only }}"
+
+        EXTRA_FLAGS=""
+        [[ -n "$MIN_VERSION" ]] && EXTRA_FLAGS="$EXTRA_FLAGS --min-version $MIN_VERSION"
+        [[ "$REPORT_ONLY" == "true" ]] && EXTRA_FLAGS="$EXTRA_FLAGS --report-only"
+        [[ "${{ inputs.summary }}" == "true" ]] && EXTRA_FLAGS="$EXTRA_FLAGS --summary $SUMMARY_FILE"
+
+        # Run the scan (always emit SARIF; format controls console output)
+        python -m crp scan \
+          --paths "$PATHS" \
+          --fail-on "$FAIL_ON" \
+          --format "$FORMAT" \
+          --sarif  "$SARIF_FILE" \
+          --min-grounding "$MIN_GROUNDING" \
+          $EXTRA_FLAGS \
+          || SCAN_EXIT=$?
+
+        SCAN_EXIT=${SCAN_EXIT:-0}
+
+        # Expose outputs
+        echo "sarif_file=$SARIF_FILE" >> "$GITHUB_OUTPUT"
+
+        # Parse SARIF for finding count + highest severity
+        python - <<'PY' "$SARIF_FILE" "$GITHUB_OUTPUT"
+        import sys, json, pathlib
+        sarif_path = sys.argv[1]
+        out_path   = sys.argv[2]
+        try:
+            sarif = json.loads(pathlib.Path(sarif_path).read_text())
+            results = []
+            for run in sarif.get('runs', []):
+                results.extend(run.get('results', []))
+            count = len(results)
+            sev_map = {'none': 0, 'note': 1, 'warning': 2, 'error': 3}
+            label_map = {0: 'NONE', 1: 'LOW', 2: 'MEDIUM', 3: 'HIGH'}
+            highest = max((sev_map.get(r.get('level','none'), 0) for r in results), default=0)
+        except Exception:
+            count, highest = 0, 0
+        with open(out_path, 'a') as f:
+            f.write(f'findings_count={count}\n')
+            f.write(f'highest_severity={label_map.get(highest, "NONE")}\n')
+        PY
+
+        # Append summary if requested
+        if [[ "${{ inputs.summary }}" == "true" && -f "$SUMMARY_FILE" ]]; then
+          cat "$SUMMARY_FILE" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        exit $SCAN_EXIT
+
+    - name: Upload SARIF to GitHub Security tab
+      if: inputs.upload-sarif == 'true' && always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.scan.outputs.sarif_file }}
+        category: 'crp-scan'

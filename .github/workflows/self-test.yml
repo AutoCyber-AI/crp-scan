@@ -1,0 +1,36 @@
+# Self-test: run CRP-Scan on this very repository to verify the Action works.
+name: CRP-Scan Self-Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  self-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run CRP-Scan (report-only on this repo)
+        id: crp
+        uses: AutoCyber-AI/crp-scan@v1
+        with:
+          paths: '.'
+          fail-on: CRITICAL         # only fail on CRITICAL (self-test)
+          format: markdown
+          upload-sarif: true
+          summary: true
+          report-only: false
+
+      - name: Print scan outputs
+        run: |
+          echo "Findings : ${{ steps.crp.outputs.findings-count }}"
+          echo "Severity : ${{ steps.crp.outputs.highest-severity }}"
+          echo "SARIF    : ${{ steps.crp.outputs.sarif-file }}"
