@@ -2,7 +2,7 @@
   "name": "crp-scan",
   "displayName": "CRP Scan",
   "description": "AI Governance Scanner for VS Code — detects ungoverned LLM calls and missing safety policies",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "autocyber-ai",
   "license": "Elastic-2.0",
   "engines": {
@@ -24,6 +24,9 @@
     "onLanguage:python",
     "onLanguage:typescript",
     "onLanguage:javascript",
+    "onLanguage:java",
+    "onLanguage:go",
+    "onLanguage:rust",
     "onCommand:crpScan.scanWorkspace"
   ],
   "main": "./out/extension.js",
@@ -42,6 +45,10 @@
       {
         "command": "crpScan.showSettings",
         "title": "CRP: Open Settings"
+      },
+      {
+        "command": "crpScan.showScanOutput",
+        "title": "CRP: Show Last Scan Output"
       }
     ],
     "menus": {
@@ -58,6 +65,9 @@
         },
         {
           "command": "crpScan.openRemediationPR"
+        },
+        {
+          "command": "crpScan.showScanOutput"
         }
       ]
     },
@@ -79,6 +89,11 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically scan the workspace when a file is saved"
+        },
+        "crpScan.autoScanOnOpen": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically scan the workspace when a folder is opened"
         },
         "crpScan.minVersion": {
           "type": "string",

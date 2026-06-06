@@ -1,7 +1,16 @@
 import * as vscode from 'vscode'
 
-export async function scanWorkspace(collection: vscode.DiagnosticCollection) {
-  vscode.window.withProgress(
+let lastScanOutput = ''
+
+export async function scanWorkspace(
+  collection: vscode.DiagnosticCollection,
+  statusBar?: vscode.StatusBarItem
+) {
+  if (statusBar) {
+    statusBar.text = '$(sync~spin) CRP Scanning...'
+  }
+
+  await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
       title: 'Running CRP Scan...',
@@ -10,8 +19,34 @@ export async function scanWorkspace(collection: vscode.DiagnosticCollection) {
     async (_progress, _token) => {
       const { CRPScanProvider } = await import('./diagnostics')
       const provider = new CRPScanProvider(collection)
-      await provider.scanWorkspace()
-      vscode.window.showInformationMessage('CRP Scan complete — check Problems panel')
+      const output = await provider.scanWorkspace()
+      lastScanOutput = output
+
+      const config = vscode.workspace.getConfiguration('crpScan')
+      const failOn = config.get<string>('failOn', 'HIGH')
+
+      // Count findings by severity
+      const counts = provider.lastCounts
+      const total = (counts.CRITICAL || 0) + (counts.HIGH || 0) + (counts.MEDIUM || 0) + (counts.LOW || 0)
+
+      if (total === 0) {
+        vscode.window.showInformationMessage('✅ CRP Scan complete — no issues found')
+      } else {
+        const msg = `CRP Scan complete — ${total} finding(s): ${counts.CRITICAL || 0} critical, ${counts.HIGH || 0} high, ${counts.MEDIUM || 0} medium, ${counts.LOW || 0} low`
+        if ((counts.CRITICAL || 0) > 0 || (counts.HIGH || 0) > 0) {
+          vscode.window.showWarningMessage(msg, 'Open Problems').then((sel) => {
+            if (sel === 'Open Problems') {
+              vscode.commands.executeCommand('workbench.actions.view.problems')
+            }
+          })
+        } else {
+          vscode.window.showInformationMessage(msg)
+        }
+      }
+
+      if (statusBar) {
+        statusBar.text = total > 0 ? `$(shield) CRP (${total})` : '$(shield) CRP'
+      }
     }
   )
 }
@@ -44,4 +79,16 @@ export async function openRemediationPR() {
       }
     }
   )
+}
+
+export function showScanOutput() {
+  if (!lastScanOutput) {
+    vscode.window.showInformationMessage('No scan output available. Run CRP: Scan Workspace first.')
+    return
+  }
+  const doc = vscode.workspace.openTextDocument({
+    content: lastScanOutput,
+    language: 'json',
+  })
+  doc.then((d) => vscode.window.showTextDocument(d))
 }
