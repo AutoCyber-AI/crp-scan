@@ -4,6 +4,9 @@
 # Scans a repository for CRP / AI-governance conformance and uploads
 # findings to the GitHub Security tab via SARIF.
 #
+# v4.0.0: adds semantic code ingestion (SPEC-039), remediation PRs (SPEC-036),
+# and GitHub App integration (SPEC-048).
+#
 # Usage (minimal):
 #
 #   - uses: AutoCyber-AI/crp-scan@v1
@@ -17,12 +20,14 @@
 #       format: sarif
 #       upload-sarif: true
 #       summary: true
+#       auto-remediate: false    # v4: open a remediation PR on HIGH+ findings
 
 name: 'CRP-Scan'
 description: >-
   Scan your repository for AI-governance conformance — detects ungoverned
   LLM calls, missing safety policies, missing audit trails, and version
   drift. Uploads results to the GitHub Security tab (SARIF).
+  v4 adds semantic code ingestion and automated remediation PRs.
 
 branding:
   icon: 'shield'
@@ -64,7 +69,7 @@ inputs:
 
   min-version:
     description: >
-      Minimum crprotocol version to enforce (e.g. '3.1.0').
+      Minimum crprotocol version to enforce (e.g. '4.0.0').
     required: false
     default: ''
 
@@ -80,6 +85,20 @@ inputs:
     required: false
     default: 'false'
 
+  auto-remediate:
+    description: >
+      v4: When 'true', open a remediation PR for HIGH+ findings.
+      Requires contents: write permission and a GitHub token.
+      NEVER commits to the default branch directly — always opens a PR.
+    required: false
+    default: 'false'
+
+  remediation-branch-prefix:
+    description: >
+      Branch prefix for auto-remediation PRs. Default 'crp-scan/fix'.
+    required: false
+    default: 'crp-scan/fix'
+
   python-version:
     description: >
       Python version to install crprotocol with. Defaults to '3.11'.
@@ -89,7 +108,7 @@ inputs:
   crprotocol-version:
     description: >
       crprotocol package version to install. Leave blank for latest.
-      NOTE: crp scan requires crprotocol >= 3.1.0
+      NOTE: crp scan v4 features require crprotocol >= 4.0.0
     required: false
     default: ''
 
@@ -106,6 +125,10 @@ outputs:
     description: 'Highest severity finding (NONE | LOW | MEDIUM | HIGH | CRITICAL).'
     value: ${{ steps.scan.outputs.highest_severity }}
 
+  remediation-pr-url:
+    description: 'URL of the opened remediation PR (if auto-remediate is true).'
+    value: ${{ steps.remediate.outputs.pr_url }}
+
 runs:
   using: 'composite'
   steps:
@@ -120,13 +143,12 @@ runs:
         set -euo pipefail
         PKG="crprotocol"
         VER="${{ inputs.crprotocol-version }}"
-        # crp scan requires crprotocol >= 3.1.0 (first version with crp scan CLI).
-        # Install with [cli] extra so click is included (zero-dep core requires it explicitly).
+        # v4 scan features (semantic ingestion, remediation) require crprotocol >= 4.0.0.
+        # Install with [cli] extra so click is included.
         if [[ -n "$VER" ]]; then
           pip install --quiet "${PKG}[cli]==${VER}"
         else
-          # Pin minimum version that includes crp scan; upgrade if already installed
-          pip install --quiet --upgrade "${PKG}[cli]>=3.1.0"
+          pip install --quiet --upgrade "${PKG}[cli]>=4.0.0"
         fi
         echo "Installed: $(pip show crprotocol | grep ^Version)"
 
@@ -151,7 +173,6 @@ runs:
         [[ "${{ inputs.summary }}" == "true" ]] && EXTRA_FLAGS="$EXTRA_FLAGS --summary $SUMMARY_FILE"
 
         SCAN_EXIT=0
-        # Run the scan (always emit SARIF; format controls console output)
         python -m crp scan \
           --paths "$PATHS" \
           --fail-on "$FAIL_ON" \
@@ -161,15 +182,12 @@ runs:
           $EXTRA_FLAGS \
           || SCAN_EXIT=$?
 
-        # Expose outputs
         echo "sarif_file=$SARIF_FILE" >> "$GITHUB_OUTPUT"
 
-        # Parse SARIF for finding count + highest severity
         python - <<'PY' "$SARIF_FILE" "$GITHUB_OUTPUT"
         import sys, json, pathlib
         sarif_path = sys.argv[1]
         out_path   = sys.argv[2]
-        # Define label_map before try block so it is always in scope
         sev_map   = {'none': 0, 'note': 1, 'warning': 2, 'error': 3}
         label_map = {0: 'NONE', 1: 'LOW', 2: 'MEDIUM', 3: 'HIGH', 4: 'CRITICAL'}
         count, highest = 0, 0
@@ -187,12 +205,35 @@ runs:
             f.write(f'highest_severity={label_map.get(highest, "NONE")}\n')
         PY
 
-        # Append summary if requested
         if [[ "${{ inputs.summary }}" == "true" && -f "$SUMMARY_FILE" ]]; then
           cat "$SUMMARY_FILE" >> "$GITHUB_STEP_SUMMARY"
         fi
 
         exit $SCAN_EXIT
+
+    - name: Auto-remediate findings (open PR)
+      id: remediate
+      if: inputs.auto-remediate == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        # Uses crp scan --remediate to generate a fix branch and open a PR.
+        # NEVER pushes to the default branch directly (SPEC-048 §4, CRP invariant).
+        BRANCH="${{ inputs.remediation-branch-prefix }}-${{ github.run_id }}"
+        python -m crp scan remediate \
+          --paths "${{ inputs.paths }}" \
+          --branch "$BRANCH" \
+          --fail-on "${{ inputs.fail-on }}" \
+          --gh-token "$GH_TOKEN" \
+          --repo "${{ github.repository }}" \
+          && PR_URL=$(cat /tmp/crp_remediation_pr_url 2>/dev/null || echo "")
+        echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+        if [[ -n "$PR_URL" ]]; then
+          echo "### CRP Scan — Remediation PR" >> "$GITHUB_STEP_SUMMARY"
+          echo "Opened: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
+        fi
 
     - name: Upload SARIF to GitHub Security tab
       if: inputs.upload-sarif == 'true' && always()
