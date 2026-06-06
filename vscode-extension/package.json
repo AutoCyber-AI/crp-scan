@@ -1,0 +1,112 @@
+{
+  "name": "crp-scan",
+  "displayName": "CRP Scan",
+  "description": "AI Governance Scanner for VS Code — detects ungoverned LLM calls and missing safety policies",
+  "version": "0.1.0",
+  "publisher": "autocyber-ai",
+  "license": "Elastic-2.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Machine Learning",
+    "Testing"
+  ],
+  "keywords": [
+    "ai governance",
+    "compliance",
+    "eu ai act",
+    "llm safety",
+    "crp"
+  ],
+  "activationEvents": [
+    "onLanguage:python",
+    "onLanguage:typescript",
+    "onLanguage:javascript",
+    "onCommand:crpScan.scanWorkspace"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "crpScan.scanWorkspace",
+        "title": "CRP: Scan Workspace",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "crpScan.openRemediationPR",
+        "title": "CRP: Open Remediation PR",
+        "icon": "$(git-pull-request-create)"
+      },
+      {
+        "command": "crpScan.showSettings",
+        "title": "CRP: Open Settings"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "crpScan.scanWorkspace",
+          "group": "2_workspace@5",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "crpScan.scanWorkspace"
+        },
+        {
+          "command": "crpScan.openRemediationPR"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CRP Scan",
+      "properties": {
+        "crpScan.failOn": {
+          "type": "string",
+          "default": "HIGH",
+          "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+          "description": "Minimum severity that causes a diagnostic error"
+        },
+        "crpScan.paths": {
+          "type": "string",
+          "default": ".",
+          "description": "Comma-separated paths to scan relative to workspace root"
+        },
+        "crpScan.autoScanOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically scan the workspace when a file is saved"
+        },
+        "crpScan.minVersion": {
+          "type": "string",
+          "default": "",
+          "description": "Minimum crprotocol version to enforce (e.g. 4.0.0)"
+        }
+      }
+    },
+    "problemMatchers": [
+      {
+        "name": "crp-scan",
+        "pattern": {
+          "regexp": "^(CRP[0-9]{3}):\\s+(.*?)\\s+—\\s+(.*)$",
+          "code": 1,
+          "message": 3,
+          "severity": 2
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}
