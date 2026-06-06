@@ -22,16 +22,12 @@
 #       summary: true
 #       auto-remediate: false    # v4: open a remediation PR on HIGH+ findings
 
-name: 'CRP-Scan'
-description: >-
-  Scan your repository for AI-governance conformance — detects ungoverned
-  LLM calls, missing safety policies, missing audit trails, and version
-  drift. Uploads results to the GitHub Security tab (SARIF).
-  v4 adds semantic code ingestion and automated remediation PRs.
+name: 'CRP Scan'
+description: 'Detect ungoverned AI calls, missing safety policies, and audit gaps. Uploads SARIF to GitHub Security tab.'
 
 branding:
   icon: 'shield'
-  color: 'blue'
+  color: 'purple'
 
 inputs:
   paths:
