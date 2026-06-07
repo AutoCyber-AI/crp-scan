@@ -13,10 +13,13 @@ steps:
 - script: npm install -g @vscode/vsce
   displayName: 'Install vsce'
 
-- script: vsce package
+- script: |
+    cd vscode-extension
+    vsce package
   displayName: 'Package extension'
 
 - script: |
+    cd vscode-extension
     vsce publish \
       --packagePath *.vsix \
       --azure-credential \
