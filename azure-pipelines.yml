@@ -1,0 +1,22 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- task: NodeTool@0
+  inputs:
+    versionSpec: '18.x'
+  displayName: 'Install Node.js'
+
+- script: npm install -g @vscode/vsce
+  displayName: 'Install vsce'
+
+- script: vsce package
+  displayName: 'Package extension'
+
+- task: VSCEPublish@1
+  inputs:
+    serviceConnection: 'CRP-COMPLY-SCAN'
+    packagePath: '*.vsix'
