@@ -16,7 +16,9 @@ steps:
 - script: vsce package
   displayName: 'Package extension'
 
-- task: VSCEPublish@1
-  inputs:
-    serviceConnection: 'CRP-COMPLY-SCAN'
-    packagePath: '*.vsix'
+- script: |
+    vsce publish \
+      --packagePath *.vsix \
+      --azure-credential \
+      --serviceConnection CRP-COMPLY-SCAN
+  displayName: 'Publish extension using Managed Identity'
