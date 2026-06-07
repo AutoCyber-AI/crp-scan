@@ -5,23 +5,36 @@ pool:
   vmImage: ubuntu-latest
 
 steps:
+# Install Node 20
 - task: UseNode@1
   inputs:
     version: '20.x'
   displayName: 'Install Node.js'
 
+# Install vsce globally
 - script: npm install -g @vscode/vsce
   displayName: 'Install vsce'
 
+# Package the VS Code extension
 - script: |
     cd vscode-extension
     vsce package
   displayName: 'Package extension'
 
+# Publish using Azure DevOps CLI + Managed Identity
 - script: |
     cd vscode-extension
-    vsce publish \
-      --packagePath *.vsix \
-      --azure-credential \
-      --serviceConnection CRP-COMPLY-SCAN
+
+    # Install Azure DevOps CLI extension
+    az extension add --name azure-devops
+
+    # Configure defaults (your org + project)
+    az devops configure --defaults \
+      organization=https://dev.azure.com/autocyberai \
+      project=crp-scan
+
+    # Publish the VSIX using your WIF service connection
+    az devops extension publish \
+      --service-connection CRP-COMPLY-SCAN \
+      --vsix *.vsix
   displayName: 'Publish extension using Managed Identity'
