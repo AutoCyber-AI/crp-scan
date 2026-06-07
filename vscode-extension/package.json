@@ -77,7 +77,12 @@
         "crpScan.failOn": {
           "type": "string",
           "default": "HIGH",
-          "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "CRITICAL"
+          ],
           "description": "Minimum severity that causes a diagnostic error"
         },
         "crpScan.paths": {
@@ -120,8 +125,8 @@
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.19.42",
+    "@types/vscode": "^1.120.0",
     "typescript": "^5.3.0"
   }
 }

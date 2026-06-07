@@ -52,7 +52,7 @@ export class CRPScanProvider implements vscode.CodeActionProvider {
     try {
       const { stdout } = await execFileAsync('python', args, {
         cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-        timeout: 120_000,
+        timeout: 120_000
       })
 
       const findings: ScanFinding[] = JSON.parse(stdout)
@@ -60,19 +60,15 @@ export class CRPScanProvider implements vscode.CodeActionProvider {
       this.updateCounts(findings)
       return stdout
     } catch (err: any) {
-      // Try to parse partial output even on non-zero exit
       if (err.stdout) {
         try {
           const findings: ScanFinding[] = JSON.parse(err.stdout)
           this.updateDiagnostics(findings)
           this.updateCounts(findings)
           return err.stdout
-        } catch {
-          // not valid JSON
-        }
+        } catch {}
       }
 
-      // Check if crp is installed
       if (err.message?.includes('No module named') || err.message?.includes('command not found')) {
         const install = await vscode.window.showErrorMessage(
           'CRP CLI not found. Install with: pip install crprotocol[cli]',
@@ -100,30 +96,36 @@ export class CRPScanProvider implements vscode.CodeActionProvider {
   }
 
   private updateDiagnostics(findings: ScanFinding[]) {
-    // Group by file
     const byFile = new Map<string, vscode.Diagnostic[]>()
 
     for (const finding of findings) {
       const filePath = finding.file || '.'
-      const uri = vscode.Uri.file(path.isAbsolute(filePath) ? filePath : path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', filePath))
+      const uri = vscode.Uri.file(
+        path.isAbsolute(filePath)
+          ? filePath
+          : path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', filePath)
+      )
 
       const line = Math.max(0, (finding.line || 1) - 1)
       const col = Math.max(0, (finding.column || 1) - 1)
       const range = new vscode.Range(line, col, line, col + 1)
       const severity = this.mapSeverity(finding.severity)
+
       const diagnostic = new vscode.Diagnostic(
         range,
         `[${finding.rule_id}] ${finding.message}`,
         severity
       )
+
       diagnostic.code = finding.rule_id
       diagnostic.source = 'crp-scan'
+
       if (finding.suggestion) {
         diagnostic.relatedInformation = [
           new vscode.DiagnosticRelatedInformation(
             new vscode.Location(uri, range),
             `Suggestion: ${finding.suggestion}`
-          ),
+          )
         ]
       }
 
@@ -133,7 +135,6 @@ export class CRPScanProvider implements vscode.CodeActionProvider {
       byFile.get(uri.fsPath)!.push(diagnostic)
     }
 
-    // Clear old diagnostics for scanned files and set new ones
     this.collection.clear()
     for (const [filePath, diagnostics] of byFile) {
       this.collection.set(vscode.Uri.file(filePath), diagnostics)
@@ -154,7 +155,6 @@ export class CRPScanProvider implements vscode.CodeActionProvider {
     }
   }
 
-  // Quick Fix: wrap LLM call in crp.Client()
   provideCodeActions(
     document: vscode.TextDocument,
     range: vscode.Range,
@@ -171,7 +171,6 @@ export class CRPScanProvider implements vscode.CodeActionProvider {
         )
         fix.diagnostics = [diagnostic]
         fix.edit = new vscode.WorkspaceEdit()
-        // TODO: Implement AST-based wrapping
         actions.push(fix)
       }
 

@@ -14,18 +14,15 @@ export async function scanWorkspace(
     {
       location: vscode.ProgressLocation.Notification,
       title: 'Running CRP Scan...',
-      cancellable: true,
+      cancellable: true
     },
-    async (_progress, _token) => {
+    async (_progress: vscode.Progress<{ message?: string; increment?: number }>, _token: vscode.CancellationToken) => {
       const { CRPScanProvider } = await import('./diagnostics')
       const provider = new CRPScanProvider(collection)
       const output = await provider.scanWorkspace()
       lastScanOutput = output
 
       const config = vscode.workspace.getConfiguration('crpScan')
-      const failOn = config.get<string>('failOn', 'HIGH')
-
-      // Count findings by severity
       const counts = provider.lastCounts
       const total = (counts.CRITICAL || 0) + (counts.HIGH || 0) + (counts.MEDIUM || 0) + (counts.LOW || 0)
 
@@ -33,15 +30,7 @@ export async function scanWorkspace(
         vscode.window.showInformationMessage('✅ CRP Scan complete — no issues found')
       } else {
         const msg = `CRP Scan complete — ${total} finding(s): ${counts.CRITICAL || 0} critical, ${counts.HIGH || 0} high, ${counts.MEDIUM || 0} medium, ${counts.LOW || 0} low`
-        if ((counts.CRITICAL || 0) > 0 || (counts.HIGH || 0) > 0) {
-          vscode.window.showWarningMessage(msg, 'Open Problems').then((sel) => {
-            if (sel === 'Open Problems') {
-              vscode.commands.executeCommand('workbench.actions.view.problems')
-            }
-          })
-        } else {
-          vscode.window.showInformationMessage(msg)
-        }
+        vscode.window.showWarningMessage(msg)
       }
 
       if (statusBar) {
@@ -59,7 +48,7 @@ export async function openRemediationPR() {
     {
       location: vscode.ProgressLocation.Notification,
       title: 'Generating remediation PR...',
-      cancellable: false,
+      cancellable: false
     },
     async () => {
       try {
@@ -86,9 +75,8 @@ export function showScanOutput() {
     vscode.window.showInformationMessage('No scan output available. Run CRP: Scan Workspace first.')
     return
   }
-  const doc = vscode.workspace.openTextDocument({
+  vscode.workspace.openTextDocument({
     content: lastScanOutput,
-    language: 'json',
-  })
-  doc.then((d) => vscode.window.showTextDocument(d))
+    language: 'json'
+  }).then((d) => vscode.window.showTextDocument(d))
 }

@@ -43,9 +43,9 @@ export function activate(context: vscode.ExtensionContext) {
     })
   )
 
-  // Auto-scan on save (if enabled)
+  // Auto-scan on save
   context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument((doc) => {
+    vscode.workspace.onDidSaveTextDocument((doc: vscode.TextDocument) => {
       const config = vscode.workspace.getConfiguration('crpScan')
       if (config.get<boolean>('autoScanOnSave', false)) {
         provider.scanDocument(doc, statusBarItem)
@@ -53,20 +53,21 @@ export function activate(context: vscode.ExtensionContext) {
     })
   )
 
-  // Register code actions (quick fixes)
+  // Register code actions
   const selector: vscode.DocumentSelector = [
     { scheme: 'file', language: 'python' },
     { scheme: 'file', language: 'typescript' },
     { scheme: 'file', language: 'javascript' },
     { scheme: 'file', language: 'java' },
     { scheme: 'file', language: 'go' },
-    { scheme: 'file', language: 'rust' },
+    { scheme: 'file', language: 'rust' }
   ]
+
   context.subscriptions.push(
     vscode.languages.registerCodeActionsProvider(selector, provider)
   )
 
-  // Initial workspace scan (if autoScanOnOpen is enabled)
+  // Auto-scan on open
   const config = vscode.workspace.getConfiguration('crpScan')
   if (config.get<boolean>('autoScanOnOpen', false)) {
     scanWorkspace(diagnosticCollection, statusBarItem)
@@ -74,7 +75,5 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  if (statusBarItem) {
-    statusBarItem.dispose()
-  }
+  statusBarItem?.dispose()
 }
