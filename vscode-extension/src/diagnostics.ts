@@ -2,7 +2,6 @@ import * as vscode from 'vscode'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import * as path from 'path'
-import * as fs from 'fs'
 
 const execFileAsync = promisify(execFile)
 
@@ -22,27 +21,57 @@ export class CRPScanProvider implements vscode.CodeActionProvider {
   constructor(private collection: vscode.DiagnosticCollection) {}
 
   async scanDocument(document: vscode.TextDocument, statusBar?: vscode.StatusBarItem): Promise<string> {
-    return this.scanPath(document.uri.fsPath, statusBar)
+    const findings = await this._scanPathRaw(document.uri.fsPath, statusBar)
+    this.updateDiagnostics(findings)
+    this.updateCounts(findings)
+    return JSON.stringify(findings)
   }
 
   async scanWorkspace(statusBar?: vscode.StatusBarItem): Promise<string> {
     const folders = vscode.workspace.workspaceFolders
     if (!folders) {
       vscode.window.showWarningMessage('No workspace folder open')
-      return ''
+      return '[]'
     }
-    let combined = ''
+
+    const allFindings: ScanFinding[] = []
     for (const folder of folders) {
-      const out = await this.scanPath(folder.uri.fsPath, statusBar)
-      combined += out
+      const findings = await this._scanPathRaw(folder.uri.fsPath, statusBar)
+      allFindings.push(...findings)
     }
-    return combined
+    this.updateDiagnostics(allFindings)
+    this.updateCounts(allFindings)
+    return JSON.stringify(allFindings)
   }
 
-  private async scanPath(targetPath: string, statusBar?: vscode.StatusBarItem): Promise<string> {
+  async scanPath(targetPath: string, statusBar?: vscode.StatusBarItem): Promise<string> {
+    const findings = await this._scanPathRaw(targetPath, statusBar)
+    this.updateDiagnostics(findings)
+    this.updateCounts(findings)
+    return JSON.stringify(findings)
+  }
+
+  private async _resolvePython(): Promise<string> {
+    const candidates = process.platform === 'win32'
+      ? ['python', 'py', 'python3']
+      : ['python3', 'python']
+
+    for (const cmd of candidates) {
+      try {
+        await execFileAsync(cmd, ['--version'], { timeout: 5000 })
+        return cmd
+      } catch {
+        // try next candidate
+      }
+    }
+    return 'python'
+  }
+
+  private async _scanPathRaw(targetPath: string, statusBar?: vscode.StatusBarItem): Promise<ScanFinding[]> {
     const config = vscode.workspace.getConfiguration('crpScan')
     const failOn = config.get<string>('failOn', 'HIGH')
     const minVersion = config.get<string>('minVersion', '')
+    const python = await this._resolvePython()
 
     const args = ['-m', 'crp', 'scan', '--format', 'json', '--fail-on', failOn, '--paths', targetPath]
     if (minVersion) {
@@ -50,26 +79,23 @@ export class CRPScanProvider implements vscode.CodeActionProvider {
     }
 
     try {
-      const { stdout } = await execFileAsync('python', args, {
+      const { stdout } = await execFileAsync(python, args, {
         cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
         timeout: 120_000
       })
-
-      const findings: ScanFinding[] = JSON.parse(stdout)
-      this.updateDiagnostics(findings)
-      this.updateCounts(findings)
-      return stdout
+      return JSON.parse(stdout) as ScanFinding[]
     } catch (err: any) {
       if (err.stdout) {
         try {
-          const findings: ScanFinding[] = JSON.parse(err.stdout)
-          this.updateDiagnostics(findings)
-          this.updateCounts(findings)
-          return err.stdout
-        } catch {}
+          return JSON.parse(err.stdout) as ScanFinding[]
+        } catch {
+          // fall through to error handling
+        }
       }
 
-      if (err.message?.includes('No module named') || err.message?.includes('command not found')) {
+      const msg = err.message || String(err)
+      const notFound = msg.includes('No module named') || msg.includes('command not found') || msg.includes('not recognized')
+      if (notFound) {
         const install = await vscode.window.showErrorMessage(
           'CRP CLI not found. Install with: pip install crprotocol[cli]',
           'Copy Command',
@@ -81,9 +107,9 @@ export class CRPScanProvider implements vscode.CodeActionProvider {
           vscode.env.openExternal(vscode.Uri.parse('https://crprotocol.io/getting-started/installation/'))
         }
       } else {
-        vscode.window.showErrorMessage(`CRP Scan failed: ${err.message}`)
+        vscode.window.showErrorMessage(`CRP Scan failed: ${msg}`)
       }
-      return ''
+      return []
     }
   }
 
@@ -157,31 +183,60 @@ export class CRPScanProvider implements vscode.CodeActionProvider {
 
   provideCodeActions(
     document: vscode.TextDocument,
-    range: vscode.Range,
+    _range: vscode.Range,
     context: vscode.CodeActionContext
   ): vscode.CodeAction[] {
     const actions: vscode.CodeAction[] = []
     for (const diagnostic of context.diagnostics) {
       if (diagnostic.source !== 'crp-scan') continue
 
+      const lineRange = document.lineAt(diagnostic.range.start.line).range
+      const lineText = document.lineAt(diagnostic.range.start.line).text
+      const appendComment = (text: string) => {
+        if (lineText.includes(text)) return undefined
+        const edit = new vscode.WorkspaceEdit()
+        edit.replace(document.uri, lineRange, `${lineText}  ${text}`)
+        return edit
+      }
+
       if (diagnostic.code === 'CRP001') {
-        const fix = new vscode.CodeAction(
-          'Wrap in CRP Client',
-          vscode.CodeActionKind.QuickFix
-        )
-        fix.diagnostics = [diagnostic]
-        fix.edit = new vscode.WorkspaceEdit()
-        actions.push(fix)
+        const edit = appendComment('// CRP: wrap in crp.Client()')
+        if (edit) {
+          const fix = new vscode.CodeAction(
+            'CRP: mark for crp.Client() wrap',
+            vscode.CodeActionKind.QuickFix
+          )
+          fix.diagnostics = [diagnostic]
+          fix.edit = edit
+          actions.push(fix)
+        }
       }
 
       if (diagnostic.code === 'CRP002') {
-        const fix = new vscode.CodeAction(
-          'Add CRP Safety Policy header',
+        const edit = appendComment('// CRP: add CRP-Safety-Policy header')
+        if (edit) {
+          const fix = new vscode.CodeAction(
+            'CRP: mark for safety header',
+            vscode.CodeActionKind.QuickFix
+          )
+          fix.diagnostics = [diagnostic]
+          fix.edit = edit
+          actions.push(fix)
+        }
+      }
+
+      if (diagnostic.code === 'CRP003' || diagnostic.code === 'CRP004' || diagnostic.code === 'CRP006') {
+        const action = new vscode.CodeAction(
+          'CRP: open documentation',
           vscode.CodeActionKind.QuickFix
         )
-        fix.diagnostics = [diagnostic]
-        fix.edit = new vscode.WorkspaceEdit()
-        actions.push(fix)
+        action.diagnostics = [diagnostic]
+        action.command = {
+          command: 'vscode.open',
+          title: 'Open CRP docs',
+          arguments: [vscode.Uri.parse('https://crprotocol.io/getting-started/installation/')]
+        }
+        actions.push(action)
       }
     }
     return actions

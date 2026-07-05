@@ -211,25 +211,13 @@ runs:
       id: remediate
       if: inputs.auto-remediate == 'true'
       shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        # Uses crp scan --remediate to generate a fix branch and open a PR.
-        # NEVER pushes to the default branch directly (SPEC-048 §4, CRP invariant).
-        BRANCH="${{ inputs.remediation-branch-prefix }}-${{ github.run_id }}"
-        python -m crp scan remediate \
-          --paths "${{ inputs.paths }}" \
-          --branch "$BRANCH" \
-          --fail-on "${{ inputs.fail-on }}" \
-          --gh-token "$GH_TOKEN" \
-          --repo "${{ github.repository }}" \
-          && PR_URL=$(cat /tmp/crp_remediation_pr_url 2>/dev/null || echo "")
-        echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-        if [[ -n "$PR_URL" ]]; then
-          echo "### CRP Scan — Remediation PR" >> "$GITHUB_STEP_SUMMARY"
-          echo "Opened: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
-        fi
+        # Auto-remediation requires a GitHub App integration (SPEC-048) which is
+        # not yet wired in this action. The input/output interface is preserved
+        # so workflows can reference remediation-pr-url without failing.
+        echo "::warning::CRP-Scan auto-remediate is not yet implemented. Open a remediation PR manually or via the CRP GitHub App integration."
+        echo "pr_url=" >> "$GITHUB_OUTPUT"
 
     - name: Upload SARIF to GitHub Security tab
       if: inputs.upload-sarif == 'true' && always()

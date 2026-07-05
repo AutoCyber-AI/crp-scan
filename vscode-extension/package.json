@@ -2,9 +2,17 @@
   "name": "crp-scan",
   "displayName": "CRP Scan",
   "description": "AI Governance Scanner for VS Code — detects ungoverned LLM calls and missing safety policies",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "autocyber-ai",
   "license": "Elastic-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AutoCyber-AI/crp-scan.git"
+  },
+  "homepage": "https://crprotocol.io",
+  "bugs": {
+    "url": "https://github.com/AutoCyber-AI/crp-scan/issues"
+  },
   "engines": {
     "vscode": "^1.120.0"
   },
@@ -106,23 +114,13 @@
           "description": "Minimum crprotocol version to enforce (e.g. 4.0.0)"
         }
       }
-    },
-    "problemMatchers": [
-      {
-        "name": "crp-scan",
-        "pattern": {
-          "regexp": "^(CRP[0-9]{3}):\\s+(.*?)\\s+—\\s+(.*)$",
-          "code": 1,
-          "message": 3,
-          "severity": 2
-        }
-      }
-    ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^20.19.42",

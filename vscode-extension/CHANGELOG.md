@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0] - 2026-07-04
+
+### Added
+- Cross-platform Python discovery (`python`, `python3`, `py`).
+- Workspace scan now returns a single valid JSON array instead of concatenated outputs.
+- Real Quick Fixes for CRP001/CRP002 (inline comments to mark remediation).
+- Additional rule support surfaced from the CLI: hard-coded API keys, raw
+  `fetch`/`axios`/`curl` LLM calls, and more language coverage.
+- Marketplace metadata: `repository`, `homepage`, `bugs`, and `package` script.
+
+### Changed
+- `CRP: Open Remediation PR` now explains that remediation PRs are generated
+  by the CRP-Scan GitHub Action.
+- `.vscodeignore` excludes `node_modules` and source TypeScript files from the
+  packaged extension.
+
 ## [0.2.0] - 2026-06-05
 
 ### Added
