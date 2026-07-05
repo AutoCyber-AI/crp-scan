@@ -55,7 +55,7 @@ That's it. Push and the scan runs automatically.
 
 CRP-Scan is also available as a VS Code extension for inline diagnostics.
 
-- Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=autocyber-ai.crp-scan) (search for **CRP Scan**).
+- Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=AutoCyberAI.crp-scan) (search for **CRP Scan**).
 - Or download the latest `.vsix` from the [Releases](https://github.com/AutoCyber-AI/crp-scan/releases) page and install it manually (`Extensions: Install from VSIX...`).
 
 Run `CRP: Scan Workspace` from the command palette to see findings in the

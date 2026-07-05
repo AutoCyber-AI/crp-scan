@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.1] - 2026-07-05
+
+### Fixed
+- Corrected marketplace publisher ID from `autocyber-ai` to `AutoCyberAI`.
+
 ## [0.3.0] - 2026-07-04
 
 ### Added

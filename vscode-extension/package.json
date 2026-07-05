@@ -2,8 +2,8 @@
   "name": "crp-scan",
   "displayName": "CRP Scan",
   "description": "AI Governance Scanner for VS Code — detects ungoverned LLM calls and missing safety policies",
-  "version": "0.3.0",
-  "publisher": "autocyber-ai",
+  "version": "0.3.1",
+  "publisher": "AutoCyberAI",
   "license": "Elastic-2.0",
   "repository": {
     "type": "git",
